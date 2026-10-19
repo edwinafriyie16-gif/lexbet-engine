@@ -1,6 +1,7 @@
 from __future__ import annotations
 import json, os, re, sqlite3
 from pathlib import Path
+from http.server import BaseHTTPRequestHandler
 from urllib.parse import urlencode
 from urllib.request import Request, urlopen
 
@@ -62,7 +63,7 @@ def answer(message):
         return {'reply':'Pick a match or ask “give me the best 5 odds today.” Each card includes the evidence, main risk, and strongest alternative so you can debate the call.', 'picks':rows[:3], 'count':min(3,len(rows))}
     return {'reply':'Try “give me the best 5 odds today”, “show me the safest picks”, or ask “why Barcelona?” The desk ranks likely outcomes and explains the reasoning.', 'picks':[], 'count':len(rows)}
 
-def handler(request):
+def handle_request(request):
     if request.method != 'POST':
         return {'statusCode':405,'headers':{'Content-Type':'application/json'},'body':json.dumps({'error':'POST a JSON message'})}
     try: payload=json.loads(request.body or '{}')
@@ -70,5 +71,21 @@ def handler(request):
     result=answer(str(payload.get('message','')))
     return {'statusCode':200,'headers':{'Content-Type':'application/json','Cache-Control':'no-store'},'body':json.dumps(result)}
 
-def main(request):
-    return handler(request)
+class handler(BaseHTTPRequestHandler):
+    def do_POST(self):
+        result = handle_request(type('Request', (), {
+            'method': 'POST',
+            'body': self.rfile.read(int(self.headers.get('Content-Length', '0'))),
+        })())
+        body = result['body'].encode()
+        self.send_response(result['statusCode'])
+        for key, value in result.get('headers', {}).items(): self.send_header(key, value)
+        self.send_header('Content-Length', str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
+
+    def do_GET(self):
+        self.send_response(405)
+        self.send_header('Content-Type', 'application/json')
+        self.end_headers()
+        self.wfile.write(b'{"error":"POST a JSON message"}')

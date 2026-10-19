@@ -14,11 +14,11 @@ class Handler(SimpleHTTPRequestHandler):
         super().do_GET()
     def do_POST(self):
         if self.path == '/api/chat':
-            from api.chat import handler
+            from api.chat import handle_request
             class Request:
                 method='POST'
                 body=self.rfile.read(int(self.headers.get('Content-Length','0')))
-            result=handler(Request())
+            result=handle_request(Request())
             self.send_response(result['statusCode'])
             for key,value in result.get('headers',{}).items(): self.send_header(key,value)
             body=result['body'].encode(); self.send_header('Content-Length',str(len(body))); self.end_headers(); self.wfile.write(body)
