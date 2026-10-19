@@ -14,9 +14,15 @@ def gemini(key, question, context):
     prompt=("You are Lexbet's cautious football-betting analyst. Discuss probabilities and uncertainty, never claim a pick is guaranteed, never encourage chasing losses, and say no bet when evidence is weak. "
             "Use only the supplied context; do not invent injuries, odds, fixtures, or statistics. Explain that the system is paper-trading only.\n\n"
             f"Backtest context:\n{context}\n\nUser question:\n{question}")
-    url='https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent'
-    r=requests.post(url,params={'key':key},json={'contents':[{'parts':[{'text':prompt}]}],'generationConfig':{'temperature':.2,'maxOutputTokens':500}},timeout=45); r.raise_for_status()
-    data=r.json(); return data['candidates'][0]['content']['parts'][0]['text']
+    body={'contents':[{'parts':[{'text':prompt}]}],'generationConfig':{'temperature':.2,'maxOutputTokens':500}}
+    last=None
+    for model in ('gemini-2.5-flash','gemini-2.5-flash-lite','gemini-3.5-flash-lite','gemini-3.1-flash-lite'):
+        url=f'https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent'
+        r=requests.post(url,params={'key':key},json=body,timeout=45)
+        if r.status_code == 404: last=r; continue
+        r.raise_for_status(); data=r.json(); return data['candidates'][0]['content']['parts'][0]['text']
+    if last is not None: last.raise_for_status()
+    raise RuntimeError('No Gemini model endpoint was available')
 
 def main():
     token=os.getenv('TELEGRAM_BOT_TOKEN'); key=os.getenv('GEMINI_API_KEY'); chat_id=os.getenv('TELEGRAM_CHAT_ID')
