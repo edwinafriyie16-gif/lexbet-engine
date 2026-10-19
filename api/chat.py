@@ -155,7 +155,8 @@ def answer(message, history=None):
         ai_reply=_gemini_reply(message, [], history)
         return {'reply':ai_reply or 'The live odds feed is temporarily unavailable or has no qualifying fixtures for today. You can still ask me about the last conversation, but I will not invent picks.', 'picks':[], 'count':0}
     wants_picks=any(word in text for word in ['best','safest','odds','today','picks','recommend','show me'])
-    contextual=rows[:n] if wants_picks else rows[:5]
+    mentioned=[r for r in rows if r['home_team'].lower() in text or r['away_team'].lower() in text]
+    contextual=(mentioned + [r for r in rows if r not in mentioned])[:n] if wants_picks else ((mentioned + [r for r in rows if r not in mentioned])[:8])
     ai_reply=_gemini_reply(message, contextual, history)
     if ai_reply:
         return {'reply':ai_reply, 'picks':contextual if wants_picks else [], 'count':len(rows)}
