@@ -24,14 +24,14 @@ The live refresh completed on 2026-10-19 with these match counts:
 - Matches with Understat xG: 3,153
 - Matches with historical closing 1X2 odds: 7,328
 
-The six-month report covers April 14 to October 14, 2026 and was not tuned to force a positive result:
+The six-month report covers April 14 to October 14, 2026 using five expanding-window monthly folds. Each fold fits on earlier matches and calibrates only on the immediately preceding validation slice. It was not tuned to force a positive result:
 
-- ROI: **−12.01%**
-- Hit rate: **32.39%**
-- Bets passing the filter: **917**
-- 1X2 Brier score: **0.6162**
-- 1X2 log loss: **1.1105**
-- Mean closing-line value: **+0.026 percentage points**
+- ROI: **−8.77%**
+- Hit rate: **34.40%**
+- Bets passing the filter: **936**
+- 1X2 Brier score: **0.6120**
+- 1X2 log loss: **1.0531**
+- Mean closing-line value: **+0.072 percentage points**
 
 This ROI is negative. It should be treated as evidence that this configuration did not produce a profitable backtest, not as a reason to increase stakes or chase losses. The report files are `reports/backtest.json`, `reports/reliability_curve.csv`, and `reports/reliability_curve.png`.
 

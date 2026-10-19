@@ -2,11 +2,12 @@
   "window_start": "2026-04-14 00:00:00+00:00",
   "window_end": "2026-10-14 00:00:00+00:00",
   "n_matches": 750,
-  "n_bets": 917,
-  "roi": -0.12009814612868047,
-  "hit_rate": 0.3238822246455834,
-  "brier_score_1x2": 0.616203774154365,
-  "log_loss_1x2": 1.1104943752288818,
-  "closing_line_value": 0.000261303140731499,
+  "n_folds": 5,
+  "n_bets": 936,
+  "roi": -0.08772435897435896,
+  "hit_rate": 0.344017094017094,
+  "brier_score_1x2": 0.6120343713568208,
+  "log_loss_1x2": 1.053080677986145,
+  "closing_line_value": 0.0007192343328119148,
   "note": "ROI is a realized historical result, not a guarantee. No tuning was performed to force profit."
 }
