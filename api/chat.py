@@ -122,16 +122,25 @@ def _gemini_reply(message, picks):
             "Do not invent injuries, form, fixtures, odds, or statistics. Explain that likelihood is not certainty, avoid promising wins, and keep the answer under 90 words. "
             f"\nLive context: {context}\nUser: {message}")
     body=json.dumps({'contents':[{'parts':[{'text':prompt}]}], 'generationConfig':{'temperature':0.2,'maxOutputTokens':220}}).encode()
-    req=Request('https://generativelanguage.googleapis.com/v1beta/interactions', data=json.dumps({'model':'gemini-4-argon','input':prompt}).encode(), headers={'Content-Type':'application/json','x-goog-api-key':key,'User-Agent':'lexbet-chat/1.0'})
     try:
+        req=Request('https://generativelanguage.googleapis.com/v1beta/interactions', data=json.dumps({'model':'gemini-4-argon','input':prompt}).encode(), headers={'Content-Type':'application/json','x-goog-api-key':key,'User-Agent':'lexbet-chat/1.0'})
         with urlopen(req, timeout=10) as response:
             data=json.loads(response.read())
         if data.get('output_text'): return data['output_text'].strip()
         for item in data.get('outputs',[]):
             if item.get('text'): return item['text'].strip()
-        return None
     except Exception:
-        return None
+        pass
+    # Compatibility path for keys/models that have not been enabled for Interactions.
+    body=json.dumps({'contents':[{'parts':[{'text':prompt}]}], 'generationConfig':{'temperature':0.2,'maxOutputTokens':220}}).encode()
+    for model in ('gemini-3.5-flash-lite','gemini-2.5-flash'):
+        try:
+            req=Request(f'https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent', data=body, headers={'Content-Type':'application/json','x-goog-api-key':key,'User-Agent':'lexbet-chat/1.0'})
+            with urlopen(req, timeout=10) as response: data=json.loads(response.read())
+            return data['candidates'][0]['content']['parts'][0]['text'].strip()
+        except Exception:
+            continue
+    return None
 
 def answer(message):
     text=message.lower(); rows=_rows(); n=_number(text)
