@@ -27,6 +27,7 @@ CREATE TABLE IF NOT EXISTS picks (
  market TEXT NOT NULL, selection TEXT NOT NULL, odds REAL NOT NULL,
  model_prob REAL NOT NULL, market_prob REAL NOT NULL, blended_prob REAL NOT NULL,
  edge REAL NOT NULL, stake REAL NOT NULL, bankroll REAL NOT NULL,
+ confidence TEXT, rationale TEXT, risks TEXT, alternatives TEXT,
  status TEXT DEFAULT 'open', outcome INTEGER, settled_at TEXT, created_at TEXT DEFAULT CURRENT_TIMESTAMP
 );
 CREATE TABLE IF NOT EXISTS paper_trades (
@@ -48,6 +49,11 @@ def connect(db_path: str | Path) -> sqlite3.Connection:
     conn = sqlite3.connect(db_path)
     conn.row_factory = sqlite3.Row
     conn.executescript(SCHEMA)
+    columns = {row[1] for row in conn.execute("PRAGMA table_info(picks)").fetchall()}
+    for name in ("confidence", "rationale", "risks", "alternatives"):
+        if name not in columns:
+            conn.execute(f"ALTER TABLE picks ADD COLUMN {name} TEXT")
+    conn.commit()
     return conn
 
 
@@ -77,7 +83,7 @@ def insert_odds(conn: sqlite3.Connection, frame: pd.DataFrame) -> int:
 
 def insert_picks(conn: sqlite3.Connection, picks: list[dict]) -> int:
     if not picks: return 0
-    cols = ["id", "event_id", "kickoff", "home_team", "away_team", "market", "selection", "odds", "model_prob", "market_prob", "blended_prob", "edge", "stake", "bankroll"]
+    cols = ["id", "event_id", "kickoff", "home_team", "away_team", "market", "selection", "odds", "model_prob", "market_prob", "blended_prob", "edge", "stake", "bankroll", "confidence", "rationale", "risks", "alternatives"]
     conn.executemany(f"INSERT OR REPLACE INTO picks ({','.join(cols)}) VALUES ({','.join('?' for _ in cols)})", [[p.get(c) for c in cols] for p in picks])
     conn.executemany("INSERT OR IGNORE INTO paper_trades (pick_id, placed_at) VALUES (?, COALESCE(?, CURRENT_TIMESTAMP))", [(p["id"], p.get("created_at")) for p in picks])
     conn.commit()

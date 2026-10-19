@@ -1,13 +1,13 @@
 # lexbet-engine
 
-A Python 3.11 research and paper-trading engine for football value-betting analysis. It does not place wagers and does not guarantee profit. Gambling involves real financial risk; use only where legal, follow age and responsible-gambling rules, and never chase losses.
+A Python 3.11 football likely-outcome research engine. It ranks the most likely result in each available market and explains the evidence, risks, and alternatives so a user can debate the recommendation. It does not place wagers or guarantee profit. Gambling involves real financial risk; use only where legal, follow age and responsible-gambling rules, and never chase losses.
 
 ## End-to-end pipeline
 
 1. `python scripts/daily_update.py` downloads and normalizes historical results and odds from soccerdata/Football-Data.co.uk, enriches top-five-league matches with Understat xG where available, and prints row counts for every SQLite table. The installed soccerdata release does not expose the Championship, so the refresh uses the same Football-Data.co.uk source directly for `ENG-Championship`. It also attempts ClubElo season-start snapshots; the ClubElo endpoint returned HTTP 502 during the October 19, 2026 run, so no Elo values were fabricated.
 2. `python scripts/train.py` creates a chronological 60/20/20 train/validation/test split, fits separate XGBoost models for 1X2 and Over/Under 2.5, and fits isotonic calibrators on validation data only. Models are saved under `artifacts/` locally.
 3. `python scripts/backtest.py` evaluates the last 183 days, removes market margin, blends calibrated model and market probabilities 50/50, applies the 2–8 percentage-point filter, and saves JSON, CSV, and PNG reliability artifacts under `reports/`.
-4. `python scripts/predict.py` fetches upcoming fixtures and odds from The Odds API, computes pre-match features, stores odds snapshots, blends probabilities, applies the pre-kickoff and edge filters, and stores qualifying picks plus paper-trade rows in SQLite.
+4. `python scripts/predict.py` fetches upcoming fixtures and odds from The Odds API, computes pre-match features, ranks the most likely outcome in each market, and stores debate-ready recommendations plus paper-trade rows in SQLite. The default minimum likelihood is 55%; configure it with `LEXBET_MIN_PROBABILITY`.
 5. `python scripts/settle.py` settles open paper picks once final match results are present. `python scripts/telegram.py` starts the Telegram bot; `/picks` reads open SQLite picks, `/stats` reads the latest backtest and paper-trade results, and `/bankroll` shows the configured paper bankroll.
 
 ## Real refresh and backtest run
@@ -33,7 +33,7 @@ The six-month report covers April 14 to October 14, 2026 using five expanding-wi
 - 1X2 log loss: **1.0531**
 - Mean closing-line value: **+0.072 percentage points**
 
-This ROI is negative. It should be treated as evidence that this configuration did not produce a profitable backtest, not as a reason to increase stakes or chase losses. The report files are `reports/backtest.json`, `reports/reliability_curve.csv`, and `reports/reliability_curve.png`.
+This ROI is negative. It remains available as a diagnostic, but it is not the live recommendation objective. The report files are `reports/backtest.json`, `reports/reliability_curve.csv`, and `reports/reliability_curve.png`.
 
 ## Setup
 
@@ -49,7 +49,7 @@ pytest -q
 
 ## Guardrails
 
-All reported bet probabilities are blended probabilities, never raw model probabilities. Market probabilities are de-vigged from decimal odds. Only fixtures that have not kicked off can pass. Edges must be between 2 and 8 percentage points inclusive; anything above 8 points is rejected, and an edge above 10 points is treated as a bug. Fractional Kelly is 0.25 and stake is capped at 2% of bankroll. Picks are recorded as paper trades and settled only after a final result is available.
+All reported probabilities are blended probabilities, never raw model probabilities. Market probabilities are de-vigged from decimal odds. Live recommendations are ranked by likelihood, not by positive market edge. Each recommendation stores its confidence, reasons, risks, and alternative outcome. The default minimum likelihood is 55%, and no stake size is suggested by the live predictor. Picks are recorded as paper trades and settled only after a final result is available.
 
 ## Reference projects
 

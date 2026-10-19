@@ -4,10 +4,15 @@ from pathlib import Path
 
 
 def format_picks(picks: list[dict]) -> str:
-    if not picks: return "No qualifying picks. No bet is a valid outcome."
-    lines=["Lexbet value-betting research picks", "Not guaranteed. Paper-trading only; stake only what you can afford to lose."]
+    if not picks: return "No likely-result recommendations met the confidence threshold. No bet is still a valid outcome."
+    lines=["Lexbet likely-result recommendations", "These are probability-based opinions, not guarantees or financial advice. Debate the evidence before staking."]
     for p in picks:
-        lines.append(f"{p['home_team']} v {p['away_team']} — {p['market']} {p['selection']} @ {p['odds']:.2f}; blended p={p['blended_prob']:.1%}; edge={p['edge']:.1%}; stake={p['stake']:.2f}")
+        lines.append(
+            f"\n{p['home_team']} v {p['away_team']} — {p['selection']} @ {p['odds']:.2f}\n"
+            f"Likelihood: {p['blended_prob']:.1%} | Confidence: {p.get('confidence', 'Unknown')}\n"
+            f"Why: {p.get('rationale', 'No rationale stored.')}\n"
+            f"Risks: {p.get('risks', 'No risk notes stored.')}\n"
+            f"Debate: {p.get('alternatives', 'Challenge the assumptions and check team news before staking.')}")
     return "\n".join(lines)
 
 class SQLiteEngine:

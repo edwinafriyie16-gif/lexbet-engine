@@ -12,7 +12,9 @@ def walk_forward(frame: pd.DataFrame, predict_fn, months: int = 6) -> dict:
     bets, returns, probs, labels = [], [], [], []
     for _, row in test.iterrows():
         out = predict_fn(row, df[df.kickoff < row.kickoff])
-        if not out or out.get("edge", 0) > .08: continue
+        if not out: continue
+        edge = out.get("edge", 0)
+        if not (.02 <= edge <= .08): continue
         bets.append(out)
         won = bool(out.get("won", False))
         returns.append((out["odds"] - 1) if won else -1)

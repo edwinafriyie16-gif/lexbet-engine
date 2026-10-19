@@ -1,7 +1,8 @@
 import numpy as np
 import pandas as pd
 from lexbet.data import build_features, leakage_check
-from lexbet.model import remove_margin, value_filter, fractional_kelly, blend
+from lexbet.model import remove_margin, value_filter, fractional_kelly, blend, rank_outcomes
+from lexbet.telegram_bot import format_picks
 
 
 def sample():
@@ -40,3 +41,20 @@ def test_value_filter_time_and_edge_guards():
 
 def test_kelly_is_capped():
     assert fractional_kelly(.9, 2.0, 1000) <= 20
+
+
+def test_recommendations_rank_likelihood_not_edge():
+    out = rank_outcomes(["Home", "Draw", "Away"], [.80, .10, .10], [.75, .15, .10], [.775, .125, .10], [1.10, 8.0, 12.0])
+    assert out[0]["selection"] == "Home"
+    assert out[0]["confidence"] == "Medium-high"
+
+
+def test_pick_format_contains_debate_fields():
+    text = format_picks([{
+        "home_team": "Barcelona", "away_team": "Opponent", "market": "1X2", "selection": "Home",
+        "odds": 1.10, "blended_prob": .91, "confidence": "High",
+        "rationale": "Strong home form.", "risks": "Rotation.", "alternatives": "Draw is the alternative.",
+    }])
+    assert "Likelihood: 91.0%" in text
+    assert "Why: Strong home form." in text
+    assert "Debate: Draw is the alternative." in text

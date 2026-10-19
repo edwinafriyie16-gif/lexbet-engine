@@ -56,6 +56,35 @@ def blend(model_prob: np.ndarray, market_prob: np.ndarray, weight: float = .5) -
     return result / result.sum(axis=1, keepdims=True)
 
 
+def confidence_label(prob: float, model_prob: float, market_prob: float) -> str:
+    """Describe confidence from probability and model/market agreement."""
+    agreement = abs(model_prob - market_prob)
+    if prob >= .85 and agreement <= .08:
+        return "High"
+    if prob >= .70 and agreement <= .15:
+        return "Medium-high"
+    if prob >= .55:
+        return "Medium"
+    return "Low"
+
+
+def rank_outcomes(names, model_probs, market_probs, blended_probs, odds=None) -> list[dict]:
+    """Return all outcomes ranked by likelihood, not by betting edge."""
+    odds = odds or [None] * len(names)
+    rows = []
+    for name, model_prob, market_prob, blended_prob, price in zip(names, model_probs, market_probs, blended_probs, odds):
+        rows.append({
+            "selection": name,
+            "model_prob": float(model_prob),
+            "market_prob": float(market_prob),
+            "blended_prob": float(blended_prob),
+            "odds": None if price is None else float(price),
+            "confidence": confidence_label(float(blended_prob), float(model_prob), float(market_prob)),
+            "agreement": float(1 - abs(float(model_prob) - float(market_prob))),
+        })
+    return sorted(rows, key=lambda x: x["blended_prob"], reverse=True)
+
+
 def value_filter(prob: float, odds: float, kickoff, now=None, min_edge=.02, max_edge=.08) -> dict | None:
     now = pd.Timestamp.now(tz="UTC") if now is None else pd.Timestamp(now)
     kick = pd.Timestamp(kickoff)
