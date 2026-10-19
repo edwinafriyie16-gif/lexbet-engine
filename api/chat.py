@@ -71,21 +71,15 @@ def handle_request(request):
     result=answer(str(payload.get('message','')))
     return {'statusCode':200,'headers':{'Content-Type':'application/json','Cache-Control':'no-store'},'body':json.dumps(result)}
 
-class handler(BaseHTTPRequestHandler):
-    def do_POST(self):
-        result = handle_request(type('Request', (), {
-            'method': 'POST',
-            'body': self.rfile.read(int(self.headers.get('Content-Length', '0'))),
-        })())
-        body = result['body'].encode()
-        self.send_response(result['statusCode'])
-        for key, value in result.get('headers', {}).items(): self.send_header(key, value)
-        self.send_header('Content-Length', str(len(body)))
-        self.end_headers()
-        self.wfile.write(body)
-
-    def do_GET(self):
-        self.send_response(405)
-        self.send_header('Content-Type', 'application/json')
-        self.end_headers()
-        self.wfile.write(b'{"error":"POST a JSON message"}')
+def app(environ, start_response):
+    """Minimal WSGI entrypoint supported by Vercel's Python runtime."""
+    length = int(environ.get('CONTENT_LENGTH') or 0)
+    request = type('Request', (), {
+        'method': environ.get('REQUEST_METHOD', 'GET'),
+        'body': environ['wsgi.input'].read(length),
+    })()
+    result = handle_request(request)
+    body = result['body'].encode()
+    status = result['statusCode']
+    start_response(f"{status} {'OK' if status < 400 else 'Error'}", [(key, value) for key, value in result.get('headers', {}).items()] + [('Content-Length', str(len(body)))])
+    return [body]
