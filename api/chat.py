@@ -75,13 +75,31 @@ def _number(text):
     m=re.search(r'\b([1-9]|[1-4][0-9])\b', text)
     return int(m.group(1)) if m else 5
 
+def _gemini_reply(message, picks):
+    """Optionally turn the grounded live-pick context into a natural chat reply."""
+    key=os.getenv('GEMINI_API_KEY')
+    if not key or not picks: return None
+    context=json.dumps([{k:p.get(k) for k in ('home_team','away_team','market','display_selection','odds','blended_prob','rationale','risks')} for p in picks], ensure_ascii=False)
+    prompt=("You are Lexbet, a cautious football betting analyst. Answer the user's question using only the live fixture and market context below. "
+            "Do not invent injuries, form, fixtures, odds, or statistics. Explain that likelihood is not certainty, avoid promising wins, and keep the answer under 90 words. "
+            f"\nLive context: {context}\nUser: {message}")
+    body=json.dumps({'contents':[{'parts':[{'text':prompt}]}], 'generationConfig':{'temperature':0.2,'maxOutputTokens':220}}).encode()
+    try:
+        req=Request('https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?'+urlencode({'key':key}), data=body, headers={'Content-Type':'application/json','User-Agent':'lexbet-chat/1.0'})
+        with urlopen(req, timeout=10) as response:
+            data=json.loads(response.read())
+        return data['candidates'][0]['content']['parts'][0]['text'].strip()
+    except Exception:
+        return None
+
 def answer(message):
     text=message.lower(); rows=_rows(); n=_number(text)
     if not rows:
         return {'reply':'I do not have qualifying fixtures for today yet. Check the odds feed and kickoff date, then try again.', 'picks':[], 'count':0}
     if any(word in text for word in ['best','safest','odds','today','picks','recommend']):
         picks=rows[:n]
-        return {'reply':f"Here are the {len(picks)} strongest likely outcomes currently on the desk. I ranked them by estimated likelihood, not by edge. Challenge the risk note on each one.", 'picks':picks, 'count':len(picks)}
+        reply=_gemini_reply(message, picks) or f"Here are today's {len(picks)} strongest mixed-market outcomes. I ranked them by estimated likelihood, not by edge. Challenge the risk note on each one."
+        return {'reply':reply, 'picks':picks, 'count':len(picks)}
     match=next((r for r in rows if r['home_team'].lower() in text or r['away_team'].lower() in text), None)
     if match:
         return {'reply':f"Here is the case for {match['home_team']} v {match['away_team']}. Ask me to challenge any part of it.", 'picks':[match], 'count':1}
