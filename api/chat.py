@@ -66,8 +66,10 @@ def _live_market_rows():
             out.append({'home_team':home,'away_team':away,'market':market,'selection':selection,'display_selection':display,'odds':avg[idx], 'model_prob':prob, 'market_prob':prob, 'blended_prob':prob, 'confidence':'Market consensus', 'rationale':f"Today's de-vigged bookmaker consensus is {prob:.1%} for {display}. This hosted fallback uses live market data; the trained local model is not connected.", 'risks':'Market consensus is not a guarantee; check lineups, injuries, rotation, weather, and kickoff time.', 'alternatives':f"The strongest alternative is the other {market} outcome; challenge this pick if team news or match context changes."})
     # Additional SportyBet-style markets are fetched per event because the provider
     # exposes them through the event-odds endpoint rather than the featured feed.
-    # Optional markets are expensive on the provider API; sample only the first
-    # eight today's events and never let these requests block the featured feed.
+    # Optional markets are expensive on the provider API. Keep them opt-in so
+    # the stable daily feed is not exhausted by event-level requests.
+    if os.getenv('LEXBET_EXTRA_MARKETS','0') != '1':
+        event_sources=[]
     for sport,event in event_sources[:8]:
         if event not in today_events: continue
         event_id=event.get('id')
@@ -118,8 +120,8 @@ def _number(text):
 def _gemini_reply(message, picks, history):
     """Optionally turn the grounded live-pick context into a natural chat reply."""
     key=os.getenv('GEMINI_API_KEY')
-    if not key or not picks: return None
-    context=json.dumps([{k:p.get(k) for k in ('home_team','away_team','market','display_selection','odds','blended_prob','rationale','risks')} for p in picks], ensure_ascii=False)
+    if not key: return None
+    context=json.dumps([{k:p.get(k) for k in ('home_team','away_team','market','display_selection','odds','blended_prob','rationale','risks')} for p in picks], ensure_ascii=False) if picks else 'No live candidates are currently available.'
     transcript='\n'.join(f"{x.get('role','user')}: {x.get('content','')}" for x in history[-12:] if isinstance(x,dict))
     prompt=("You are Lexbet, a natural conversational football betting analyst. Continue the conversation instead of repeating a canned instruction. "
             "Answer casual messages naturally, answer follow-up questions directly, and compare or challenge picks when asked. Use only the live fixture and market context below. "
@@ -150,7 +152,8 @@ def answer(message, history=None):
     text=message.lower(); rows=_rows(); n=_number(text)
     history=history or []
     if not rows:
-        return {'reply':'I do not have qualifying fixtures for today yet. Check the odds feed and kickoff date, then try again.', 'picks':[], 'count':0}
+        ai_reply=_gemini_reply(message, [], history)
+        return {'reply':ai_reply or 'The live odds feed is temporarily unavailable or has no qualifying fixtures for today. You can still ask me about the last conversation, but I will not invent picks.', 'picks':[], 'count':0}
     wants_picks=any(word in text for word in ['best','safest','odds','today','picks','recommend','show me'])
     contextual=rows[:n] if wants_picks else rows[:5]
     ai_reply=_gemini_reply(message, contextual, history)
