@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Lexbet — Betting Analyst</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/styles.css" />
+</head>
+<body>
+  <div class="app-shell">
+    <aside class="sidebar">
+      <div class="brand"><span class="brand-mark">L</span><span>lexbet</span></div>
+      <div class="sidebar-label">DAILY DESK</div>
+      <button class="side-action active" data-prompt="Give me the best 5 odds today"><span>✦</span> Today’s best bets</button>
+      <button class="side-action" data-prompt="Show me the safest picks today"><span>◉</span> Safest picks</button>
+      <button class="side-action" data-prompt="What should I debate before staking?"><span>⌁</span> Debate the picks</button>
+      <div class="sidebar-bottom"><div class="live-dot"></div><span>Paper analysis mode</span></div>
+    </aside>
+
+    <main class="main-panel">
+      <header class="topbar"><div><p class="eyebrow">FOOTBALL ANALYSIS / <span id="todayLabel"></span></p><h1>Make the call with evidence.</h1></div><div class="status-pill"><span class="live-dot"></span> Desk online</div></header>
+      <section class="hero-strip"><div><span class="hero-kicker">YOUR DAILY BETTING ANALYST</span><p>Ask for likely results. Challenge the reasoning. Decide what you stake.</p></div><div class="hero-stat"><strong id="pickCount">—</strong><span>open recommendations</span></div></section>
+
+      <section class="chat-wrap">
+        <div id="messages" class="messages" aria-live="polite">
+          <div class="message assistant"><div class="avatar">L</div><div class="bubble"><p>Good morning. I’m watching today’s fixtures and I’ll show you the most likely results—not just “value.”</p><p class="muted">Try: <button class="inline-prompt" data-prompt="Give me the best 5 odds today">“Give me the best 5 odds today.”</button></p></div></div>
+        </div>
+        <div class="composer"><textarea id="prompt" rows="1" placeholder="Ask about today's bets…"></textarea><button id="send" class="send-btn" aria-label="Send message">↗</button></div>
+        <div class="suggestions"><button data-prompt="Give me the best 5 odds today">Best 5 odds today</button><button data-prompt="Show me the safest picks today">Safest picks</button><button data-prompt="Why did you choose the top pick?">Why this pick?</button></div>
+      </section>
+    </main>
+    <aside class="insight-panel"><div class="panel-heading"><span>THE DESK</span><span class="small-live">LIVE</span></div><div class="insight-card"><div class="insight-label">METHOD</div><h3>Likelihood first.</h3><p>Market consensus is context. The desk ranks likely outcomes, then shows you the evidence and the risks.</p></div><div class="insight-card"><div class="insight-label">RULE OF THE DAY</div><h3>Debate the risk.</h3><p>A high probability is not a guarantee. Ask what would change the call before you stake.</p></div><div class="disclaimer">Analysis only. No bet is guaranteed. Check lineups and local rules.</div></aside>
+  </div>
+  <script src="/app.js"></script>
+</body>
+</html>

@@ -10,6 +10,21 @@ A Python 3.11 football likely-outcome research engine. It ranks the most likely 
 4. `python scripts/predict.py` fetches upcoming fixtures and odds from The Odds API, computes pre-match features, ranks the most likely outcome in each market, and stores debate-ready recommendations plus paper-trade rows in SQLite. The default minimum likelihood is 55%; configure it with `LEXBET_MIN_PROBABILITY`.
 5. `python scripts/settle.py` settles open paper picks once final match results are present. `python scripts/telegram.py` starts the Telegram bot; `/picks` reads open SQLite picks, `/stats` reads the latest backtest and paper-trade results, and `/bankroll` shows the configured paper bankroll.
 
+## Daily betting chat site
+
+The plain-local chat site lives in `site/` with a small API at `api/chat.py`. It answers natural-language prompts such as `Give me the best 5 odds today`, ranks stored open recommendations by likelihood, and shows the rationale, risks, and strongest alternative for each pick. The site does not place bets or claim certainty.
+
+Run the daily data/model workflow first, then start the site:
+
+```bash
+python scripts/daily_update.py
+python scripts/train.py
+python scripts/predict.py
+python scripts/web.py 3000
+```
+
+Open `http://localhost:3000/`. The site reads the same `data/lexbet.sqlite` recommendations as the Telegram bot. To deploy the site on Vercel after logging in, run `vercel --prod` from the repository root. Set `LEXBET_DB_PATH` only when the SQLite database is mounted or supplied by the hosting environment; for a persistent hosted deployment, connect the API to a hosted database rather than relying on a local SQLite file.
+
 ## Real refresh and backtest run
 
 The live refresh completed on 2026-10-19 with these match counts:
