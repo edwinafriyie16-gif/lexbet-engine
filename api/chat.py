@@ -66,7 +66,9 @@ def _live_market_rows():
             out.append({'home_team':home,'away_team':away,'market':market,'selection':selection,'display_selection':display,'odds':avg[idx], 'model_prob':prob, 'market_prob':prob, 'blended_prob':prob, 'confidence':'Market consensus', 'rationale':f"Today's de-vigged bookmaker consensus is {prob:.1%} for {display}. This hosted fallback uses live market data; the trained local model is not connected.", 'risks':'Market consensus is not a guarantee; check lineups, injuries, rotation, weather, and kickoff time.', 'alternatives':f"The strongest alternative is the other {market} outcome; challenge this pick if team news or match context changes."})
     # Additional SportyBet-style markets are fetched per event because the provider
     # exposes them through the event-odds endpoint rather than the featured feed.
-    for sport,event in event_sources[:40]:
+    # Optional markets are expensive on the provider API; sample only the first
+    # eight today's events and never let these requests block the featured feed.
+    for sport,event in event_sources[:8]:
         if event not in today_events: continue
         event_id=event.get('id')
         if not event_id: continue
