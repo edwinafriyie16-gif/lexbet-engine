@@ -1,17 +1,39 @@
 # lexbet-engine
 
-A Python 3.11 research engine for football value-betting analysis. It is designed for paper trading and auditability, not guaranteed profit. Gambling involves real financial risk; use legal, age-appropriate, responsible-gambling practices and never chase losses.
+A Python 3.11 research and paper-trading engine for football value-betting analysis. It does not place wagers and does not guarantee profit. Gambling involves real financial risk; use only where legal, follow age and responsible-gambling rules, and never chase losses.
 
-## What is included
+## End-to-end pipeline
 
-- SQLite storage for match results, xG, Elo, historical odds, live odds snapshots, and closing prices.
-- Adapters for `soccerdata` sources: Football-Data.co.uk match history and odds, Understat xG, and ClubElo ratings. The six configured competitions are the top five European leagues plus the English Championship.
-- Leakage-safe pre-match features: shifted rolling form, venue splits, goals and xG averages, Elo difference, and rest days.
-- XGBoost hooks for 1X2 and totals plus an Elo/Poisson baseline. The intended evaluation protocol is chronological: train on earlier matches, calibrate on a later validation slice, then walk forward over the last six months. No random split is permitted.
-- Isotonic calibration and reliability-bin helpers.
-- De-vigged market probabilities and a mandatory model/market blend. The engine is not allowed to expose raw model probabilities as bet probabilities.
-- Value filter: only pre-kickoff events with 2–8 percentage-point edge. Edges above 8 pp are rejected; any edge above 10 pp is explicitly treated as a bug. Fractional Kelly is 0.25 and stake is capped at 2% of bankroll.
-- Telegram commands `/picks`, `/stats`, and `/bankroll` with clear no-guarantee wording.
+1. `python scripts/daily_update.py` downloads and normalizes historical results and odds from soccerdata/Football-Data.co.uk, enriches top-five-league matches with Understat xG where available, and prints row counts for every SQLite table. The installed soccerdata release does not expose the Championship, so the refresh uses the same Football-Data.co.uk source directly for `ENG-Championship`. It also attempts ClubElo season-start snapshots; the ClubElo endpoint returned HTTP 502 during the October 19, 2026 run, so no Elo values were fabricated.
+2. `python scripts/train.py` creates a chronological 60/20/20 train/validation/test split, fits separate XGBoost models for 1X2 and Over/Under 2.5, and fits isotonic calibrators on validation data only. Models are saved under `artifacts/` locally.
+3. `python scripts/backtest.py` evaluates the last 183 days, removes market margin, blends calibrated model and market probabilities 50/50, applies the 2–8 percentage-point filter, and saves JSON, CSV, and PNG reliability artifacts under `reports/`.
+4. `python scripts/predict.py` fetches upcoming fixtures and odds from The Odds API, computes pre-match features, stores odds snapshots, blends probabilities, applies the pre-kickoff and edge filters, and stores qualifying picks plus paper-trade rows in SQLite.
+5. `python scripts/settle.py` settles open paper picks once final match results are present. `python scripts/telegram.py` starts the Telegram bot; `/picks` reads open SQLite picks, `/stats` reads the latest backtest and paper-trade results, and `/bankroll` shows the configured paper bankroll.
+
+## Real refresh and backtest run
+
+The live refresh completed on 2026-10-19 with these match counts:
+
+- English Premier League: 1,200
+- Spanish La Liga: 1,218
+- German Bundesliga: 963
+- Italian Serie A: 1,200
+- French Ligue 1: 972
+- English Championship: 1,775
+- Total matches: 7,328
+- Matches with Understat xG: 3,153
+- Matches with historical closing 1X2 odds: 7,328
+
+The six-month report covers April 14 to October 14, 2026 and was not tuned to force a positive result:
+
+- ROI: **−12.01%**
+- Hit rate: **32.39%**
+- Bets passing the filter: **917**
+- 1X2 Brier score: **0.6162**
+- 1X2 log loss: **1.1105**
+- Mean closing-line value: **+0.026 percentage points**
+
+This ROI is negative. It should be treated as evidence that this configuration did not produce a profitable backtest, not as a reason to increase stakes or chase losses. The report files are `reports/backtest.json`, `reports/reliability_curve.csv`, and `reports/reliability_curve.png`.
 
 ## Setup
 
@@ -23,26 +45,12 @@ cp .env.example .env
 pytest -q
 ```
 
-The live data path requires `ODDS_API_KEY`. Telegram requires `TELEGRAM_BOT_TOKEN` and `TELEGRAM_CHAT_ID`. Never commit `.env` or a database containing credentials.
+`ODDS_API_KEY` is required for `scripts/predict.py`. `TELEGRAM_BOT_TOKEN` is required for the bot. `LEXBET_BANKROLL` defaults to 1000. No live prediction call was made in this run because no Odds API key was present in the environment.
 
-## Historical refresh
+## Guardrails
 
-```bash
-python scripts/daily_update.py
-```
-
-Schedule that command once per day with cron or a managed scheduler. Scrapers are network-dependent and may break when upstream websites change. Respect each provider's terms and rate limits.
-
-## Modeling and backtesting
-
-The package exposes primitives in `lexbet.model` and `lexbet.backtest`. A production runner should persist each feature snapshot and odds timestamp, use a chronological train/validation/test split, fit calibration only on validation data, and record the odds available at decision time. The six-month walk-forward report must include ROI, hit rate, Brier score, log loss, and closing line value. A positive backtest ROI is not evidence of future profit; if the measured ROI is not positive, the README and report must say so rather than tuning until it is.
-
-This starter repository intentionally does not fabricate historical results or claim a backtest number without a downloaded, timestamped dataset. Run the data refresh and a documented walk-forward before treating any output as evidence.
+All reported bet probabilities are blended probabilities, never raw model probabilities. Market probabilities are de-vigged from decimal odds. Only fixtures that have not kicked off can pass. Edges must be between 2 and 8 percentage points inclusive; anything above 8 points is rejected, and an edge above 10 points is treated as a bug. Fractional Kelly is 0.25 and stake is capped at 2% of bankroll. Picks are recorded as paper trades and settled only after a final result is available.
 
 ## Reference projects
 
-The design takes inspiration from the public data-source adapters and analytics concepts in [soccerdata](https://github.com/probberechts/soccerdata) (Apache-2.0) and the feature/evaluation ideas in [ProphitBet-Soccer-Bets-Predictor](https://github.com/kochlisGit/ProphitBet-Soccer-Bets-Predictor) (MIT). No GUI code is copied. See their repositories for their full license texts and provider-specific limitations.
-
-## Status
-
-This is an initial research scaffold. It is not a betting service, does not place wagers, and makes no guarantee of profit. Provider schemas, league identifiers, calibration quality, and odds timestamps must be validated before live use.
+The design reuses ideas from [soccerdata](https://github.com/probberechts/soccerdata) (Apache-2.0), especially its source adapters and consistent match identifiers, and from [ProphitBet-Soccer-Bets-Predictor](https://github.com/kochlisGit/ProphitBet-Soccer-Bets-Predictor) (MIT), especially feature engineering and evaluation concepts. No GUI code is copied.

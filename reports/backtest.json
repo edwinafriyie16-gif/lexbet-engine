@@ -1,0 +1,12 @@
+{
+  "window_start": "2026-04-14 00:00:00+00:00",
+  "window_end": "2026-10-14 00:00:00+00:00",
+  "n_matches": 750,
+  "n_bets": 917,
+  "roi": -0.12009814612868047,
+  "hit_rate": 0.3238822246455834,
+  "brier_score_1x2": 0.616203774154365,
+  "log_loss_1x2": 1.1104943752288818,
+  "closing_line_value": 0.000261303140731499,
+  "note": "ROI is a realized historical result, not a guarantee. No tuning was performed to force profit."
+}
