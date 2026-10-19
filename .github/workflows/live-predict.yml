@@ -1,0 +1,41 @@
+name: Live paper picks
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "0 9 * * *"
+
+permissions:
+  contents: read
+
+jobs:
+  predict:
+    runs-on: ubuntu-latest
+    env:
+      ODDS_API_KEY: ${{ secrets.ODDS_API_KEY }}
+      LEXBET_BANKROLL: "1000"
+      SKIP_ELO: "1"
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+      - name: Refresh historical data
+        run: python scripts/daily_update.py
+      - name: Train calibrated models
+        run: python scripts/train.py
+      - name: Generate paper picks
+        run: python scripts/predict.py
+      - name: Upload reports and model artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: lexbet-live-run-${{ github.run_number }}
+          path: |
+            reports/
+            data/lexbet.sqlite
+          if-no-files-found: ignore
