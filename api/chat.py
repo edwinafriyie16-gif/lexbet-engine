@@ -1,5 +1,6 @@
 from __future__ import annotations
 import json, os, re, sqlite3
+from datetime import datetime, timezone
 from pathlib import Path
 from urllib.parse import urlencode
 from urllib.request import Request, urlopen
@@ -20,29 +21,55 @@ def _rows():
     return _live_market_rows()
 
 def _live_market_rows():
-    """Use bookmaker consensus as a transparent hosted fallback when SQLite is absent."""
+    """Build today's mixed-market desk from bookmaker consensus when SQLite is absent."""
     key=os.getenv('ODDS_API_KEY')
     if not key: return []
-    try:
-        query=urlencode({'apiKey':key,'regions':'uk,eu','markets':'h2h','oddsFormat':'decimal'})
-        req=Request(f'https://api.the-odds-api.com/v4/sports/soccer_epl/odds?{query}', headers={'User-Agent':'lexbet-chat/1.0'})
-        with urlopen(req, timeout=12) as response: events=json.loads(response.read())
-    except Exception:
-        return []
+    leagues = os.getenv('LEXBET_ODDS_SPORTS', 'soccer_epl,soccer_spain_la_liga,soccer_germany_bundesliga,soccer_italy_serie_a,soccer_france_ligue_one,soccer_efl_champ').split(',')
+    today = datetime.now(timezone.utc).date()
+    events=[]
+    for sport in [x.strip() for x in leagues if x.strip()]:
+        try:
+            query=urlencode({'apiKey':key,'regions':'uk,eu','markets':'h2h,totals','oddsFormat':'decimal','dateFormat':'iso'})
+            req=Request(f'https://api.the-odds-api.com/v4/sports/{sport}/odds?{query}', headers={'User-Agent':'lexbet-chat/1.0'})
+            with urlopen(req, timeout=12) as response: events.extend(json.loads(response.read()))
+        except Exception:
+            continue
     out=[]
     for event in events:
+        try:
+            kickoff=datetime.fromisoformat(event.get('commence_time','').replace('Z','+00:00'))
+            if kickoff.astimezone(timezone.utc).date() != today: continue
+        except Exception:
+            continue
+        home=event.get('home_team','Home'); away=event.get('away_team','Away')
         prices={}
         for book in event.get('bookmakers',[]):
             for market in book.get('markets',[]):
-                if market.get('key') != 'h2h': continue
-                for outcome in market.get('outcomes',[]): prices.setdefault(outcome.get('name'),[]).append(float(outcome['price']))
-        if len(prices) < 3: continue
-        names=list(prices); avg=[sum(prices[n])/len(prices[n]) for n in names]; inv=[1/p for p in avg]; total=sum(inv)
-        probs=[p/total for p in inv]; idx=max(range(len(names)), key=lambda i:probs[i]); name=names[idx]; prob=probs[idx]
-        home=event.get('home_team','Home'); away=event.get('away_team','Away')
-        selection='Home' if name==home else 'Away' if name==away else 'Draw'
-        out.append({'home_team':home,'away_team':away,'market':'1X2','selection':selection,'display_selection':name,'odds':avg[idx], 'model_prob':prob, 'market_prob':prob, 'blended_prob':prob, 'confidence':'Market consensus', 'rationale':f"The strongest de-vigged bookmaker consensus is {prob:.1%} for {name}. This hosted fallback uses market data only because the trained local model is not connected.", 'risks':'Market consensus is not a guarantee; check lineups, injuries, rotation, and kickoff time.', 'alternatives':'Ask why the draw or the other team is not selected; disagreement with the market is a reason to pause.'})
-    return sorted(out, key=lambda x:x['blended_prob'], reverse=True)[:50]
+                mkey=market.get('key')
+                for outcome in market.get('outcomes',[]):
+                    name=outcome.get('name'); point=outcome.get('point')
+                    if not name or not outcome.get('price'): continue
+                    if mkey == 'totals' and point not in (2.5, '2.5'): continue
+                    prices.setdefault((mkey,name),[]).append(float(outcome['price']))
+        for market_key in ('h2h','totals'):
+            group={name:vals for (mk,name),vals in prices.items() if mk == market_key}
+            if market_key == 'h2h' and len(group) < 3: continue
+            if market_key == 'totals' and not {'Over','Under'}.issubset(group): continue
+            names=list(group); avg=[sum(group[n])/len(group[n]) for n in names]; inv=[1/p for p in avg]; total=sum(inv)
+            probs=[p/total for p in inv]; idx=max(range(len(names)), key=lambda i:probs[i]); name=names[idx]; prob=probs[idx]
+            if market_key == 'h2h':
+                selection='Home' if name==home else 'Away' if name==away else 'Draw'; market='1X2'; display=name
+            else:
+                selection='O' if name == 'Over' else 'U'; market='OU25'; display=f'{name} 2.5 goals'
+            out.append({'home_team':home,'away_team':away,'market':market,'selection':selection,'display_selection':display,'odds':avg[idx], 'model_prob':prob, 'market_prob':prob, 'blended_prob':prob, 'confidence':'Market consensus', 'rationale':f"Today's de-vigged bookmaker consensus is {prob:.1%} for {display}. This hosted fallback uses live market data; the trained local model is not connected.", 'risks':'Market consensus is not a guarantee; check lineups, injuries, rotation, weather, and kickoff time.', 'alternatives':f"The strongest alternative is the other {market} outcome; challenge this pick if team news or match context changes."})
+    # Keep the desk mixed: no more than two straight-win calls in the requested top five.
+    ranked=sorted(out, key=lambda x:x['blended_prob'], reverse=True)
+    selected=[]; wins=0
+    for item in ranked:
+        if item['market']=='1X2' and wins >= 2: continue
+        selected.append(item); wins += item['market']=='1X2'
+        if len(selected) >= 50: break
+    return selected
 
 def _number(text):
     m=re.search(r'\b([1-9]|[1-4][0-9])\b', text)
@@ -51,7 +78,7 @@ def _number(text):
 def answer(message):
     text=message.lower(); rows=_rows(); n=_number(text)
     if not rows:
-        return {'reply':'I do not have fresh open recommendations yet. Run the daily refresh, train the model, then run scripts/predict.py so the desk has today’s fixtures and odds.', 'picks':[], 'count':0}
+        return {'reply':'I do not have qualifying fixtures for today yet. Check the odds feed and kickoff date, then try again.', 'picks':[], 'count':0}
     if any(word in text for word in ['best','safest','odds','today','picks','recommend']):
         picks=rows[:n]
         return {'reply':f"Here are the {len(picks)} strongest likely outcomes currently on the desk. I ranked them by estimated likelihood, not by edge. Challenge the risk note on each one.", 'picks':picks, 'count':len(picks)}
