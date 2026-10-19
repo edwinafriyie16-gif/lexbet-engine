@@ -62,12 +62,17 @@ def _live_market_rows():
             else:
                 selection='O' if name == 'Over' else 'U'; market='OU25'; display=f'{name} 2.5 goals'
             out.append({'home_team':home,'away_team':away,'market':market,'selection':selection,'display_selection':display,'odds':avg[idx], 'model_prob':prob, 'market_prob':prob, 'blended_prob':prob, 'confidence':'Market consensus', 'rationale':f"Today's de-vigged bookmaker consensus is {prob:.1%} for {display}. This hosted fallback uses live market data; the trained local model is not connected.", 'risks':'Market consensus is not a guarantee; check lineups, injuries, rotation, weather, and kickoff time.', 'alternatives':f"The strongest alternative is the other {market} outcome; challenge this pick if team news or match context changes."})
-    # Keep the desk mixed: no more than two straight-win calls in the requested top five.
+    # Keep the desk genuinely mixed: prefer three result calls and two totals calls,
+    # then fill from the remaining highest-likelihood candidates if a market is thin.
     ranked=sorted(out, key=lambda x:x['blended_prob'], reverse=True)
-    selected=[]; wins=0
+    result_picks=[x for x in ranked if x['market']=='1X2'][:3]
+    totals_picks=[x for x in ranked if x['market']=='OU25'][:2]
+    selected=sorted(result_picks + totals_picks, key=lambda x:x['blended_prob'], reverse=True)
+    seen={(x['home_team'],x['away_team'],x['market'],x['selection']) for x in selected}
     for item in ranked:
-        if item['market']=='1X2' and wins >= 2: continue
-        selected.append(item); wins += item['market']=='1X2'
+        keyset=(item['home_team'],item['away_team'],item['market'],item['selection'])
+        if keyset not in seen:
+            selected.append(item); seen.add(keyset)
         if len(selected) >= 50: break
     return selected
 
