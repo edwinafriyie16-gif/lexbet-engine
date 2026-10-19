@@ -1,7 +1,6 @@
 from __future__ import annotations
 import json, os, re, sqlite3
 from pathlib import Path
-from http.server import BaseHTTPRequestHandler
 from urllib.parse import urlencode
 from urllib.request import Request, urlopen
 
@@ -71,15 +70,21 @@ def handle_request(request):
     result=answer(str(payload.get('message','')))
     return {'statusCode':200,'headers':{'Content-Type':'application/json','Cache-Control':'no-store'},'body':json.dumps(result)}
 
-def app(environ, start_response):
-    """Minimal WSGI entrypoint supported by Vercel's Python runtime."""
-    length = int(environ.get('CONTENT_LENGTH') or 0)
+async def app(scope, receive, send):
+    """Minimal ASGI entrypoint supported by Vercel's Python runtime."""
+    body = b''
+    while True:
+        event = await receive()
+        body += event.get('body', b'')
+        if not event.get('more_body'):
+            break
     request = type('Request', (), {
-        'method': environ.get('REQUEST_METHOD', 'GET'),
-        'body': environ['wsgi.input'].read(length),
+        'method': scope.get('method', 'GET'),
+        'body': body,
     })()
     result = handle_request(request)
-    body = result['body'].encode()
-    status = result['statusCode']
-    start_response(f"{status} {'OK' if status < 400 else 'Error'}", [(key, value) for key, value in result.get('headers', {}).items()] + [('Content-Length', str(len(body)))])
-    return [body]
+    payload = result['body'].encode()
+    headers = [(key.encode(), value.encode()) for key, value in result.get('headers', {}).items()]
+    headers.append((b'content-length', str(len(payload)).encode()))
+    await send({'type': 'http.response.start', 'status': result['statusCode'], 'headers': headers})
+    await send({'type': 'http.response.body', 'body': payload})
