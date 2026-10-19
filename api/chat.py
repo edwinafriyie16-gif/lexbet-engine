@@ -167,7 +167,7 @@ def answer(message, history=None):
     if match:
         return {'reply':f"Here is the case for {match['home_team']} v {match['away_team']}. Ask me to challenge any part of it.", 'picks':[match], 'count':1}
     if 'why' in text or 'risk' in text or 'debate' in text:
-        return {'reply':'Pick a match or ask “give me the best 5 odds today.” Each card includes the evidence, main risk, and strongest alternative so you can debate the call.', 'picks':rows[:3], 'count':min(3,len(rows))}
+        return {'reply':'Tell me which part of the call you want to challenge. I can explain the evidence, compare the alternatives, or show what would make me change the recommendation.', 'picks':rows[:3], 'count':min(3,len(rows))}
     if any(word in text for word in ['hi','hello','hey','what’s up',"what's up",'how are you']):
         return {'reply':'I’m here and watching today’s fixtures. Ask me for the best picks, challenge one of the calls, or name a match and I’ll compare the available markets.', 'picks':[], 'count':len(rows)}
     return {'reply':'Tell me which match or pick you want to examine. I can compare the result, totals, BTTS, double chance, draw-no-bet, and handicap markets where live odds are available.', 'picks':[], 'count':len(rows)}
