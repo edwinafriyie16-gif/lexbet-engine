@@ -29,6 +29,9 @@ def main():
     if not text or incoming != str(chat_id) or msg.get('from',{}).get('is_bot'): return
     context=REPORT.read_text() if REPORT.exists() else 'No backtest report is available.'
     try: answer=gemini(key,text,context)
+    except requests.HTTPError as exc:
+        code=exc.response.status_code if exc.response is not None else 'unknown'
+        answer=f"Gemini rejected the request (HTTP {code}). Check that GEMINI_API_KEY is a Google AI Studio key with Gemini API access. No pick should be treated as guaranteed."
     except Exception as exc: answer=f"I could not reach Gemini right now. No pick should be treated as guaranteed. Technical detail: {type(exc).__name__}."
     tg(token,'sendMessage',{'chat_id':chat_id,'text':answer[:3900]})
     # Confirm this update without needing a persistent server-side offset file.
