@@ -3,6 +3,7 @@ const promptBox = document.getElementById('prompt');
 const send = document.getElementById('send');
 const todayLabel = document.getElementById('todayLabel');
 const pickCount = document.getElementById('pickCount');
+const conversation = [];
 todayLabel.textContent = new Intl.DateTimeFormat('en-GB',{day:'2-digit',month:'short',year:'numeric'}).format(new Date()).toUpperCase();
 
 function addMessage(text, role='assistant', picks=[]) {
@@ -22,8 +23,8 @@ function pickCard(p){
 function esc(value){return String(value??'').replace(/[&<>'"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]));}
 async function ask(text){
   if(!text.trim()) return;
-  addMessage(text,'user'); promptBox.value=''; send.disabled=true; send.textContent='…';
-  try { const res=await fetch('/api/chat',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({message:text})}); const data=await res.json(); pickCount.textContent=data.count??'—'; addMessage(data.reply||'I could not read the desk response.', 'assistant', data.picks||[]); }
+  addMessage(text,'user'); conversation.push({role:'user', content:text}); promptBox.value=''; send.disabled=true; send.textContent='…';
+  try { const res=await fetch('/api/chat',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({message:text,history:conversation.slice(-12)})}); const data=await res.json(); pickCount.textContent=data.count??'—'; const reply=data.reply||'I could not read the desk response.'; addMessage(reply, 'assistant', data.picks||[]); conversation.push({role:'assistant',content:reply}); }
   catch(e){ addMessage('The desk is offline. Start the local server and try again.', 'assistant'); }
   finally{send.disabled=false;send.textContent='↗';}
 }

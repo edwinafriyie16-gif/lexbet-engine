@@ -113,14 +113,16 @@ def _number(text):
     m=re.search(r'\b([1-9]|[1-4][0-9])\b', text)
     return int(m.group(1)) if m else 5
 
-def _gemini_reply(message, picks):
+def _gemini_reply(message, picks, history):
     """Optionally turn the grounded live-pick context into a natural chat reply."""
     key=os.getenv('GEMINI_API_KEY')
     if not key or not picks: return None
     context=json.dumps([{k:p.get(k) for k in ('home_team','away_team','market','display_selection','odds','blended_prob','rationale','risks')} for p in picks], ensure_ascii=False)
-    prompt=("You are Lexbet, a cautious football betting analyst. Answer the user's question using only the live fixture and market context below. "
-            "Do not invent injuries, form, fixtures, odds, or statistics. Explain that likelihood is not certainty, avoid promising wins, and keep the answer under 90 words. "
-            f"\nLive context: {context}\nUser: {message}")
+    transcript='\n'.join(f"{x.get('role','user')}: {x.get('content','')}" for x in history[-12:] if isinstance(x,dict))
+    prompt=("You are Lexbet, a natural conversational football betting analyst. Continue the conversation instead of repeating a canned instruction. "
+            "Answer casual messages naturally, answer follow-up questions directly, and compare or challenge picks when asked. Use only the live fixture and market context below. "
+            "Do not invent injuries, form, fixtures, odds, or statistics. Explain that likelihood is not certainty, avoid promising wins, and keep the answer under 120 words. "
+            f"\nLive context: {context}\nConversation:\n{transcript}\nLatest user message: {message}")
     body=json.dumps({'contents':[{'parts':[{'text':prompt}]}], 'generationConfig':{'temperature':0.2,'maxOutputTokens':220}}).encode()
     try:
         req=Request('https://generativelanguage.googleapis.com/v1beta/interactions', data=json.dumps({'model':'gemini-4-argon','input':prompt}).encode(), headers={'Content-Type':'application/json','x-goog-api-key':key,'User-Agent':'lexbet-chat/1.0'})
@@ -142,27 +144,35 @@ def _gemini_reply(message, picks):
             continue
     return None
 
-def answer(message):
+def answer(message, history=None):
     text=message.lower(); rows=_rows(); n=_number(text)
+    history=history or []
     if not rows:
         return {'reply':'I do not have qualifying fixtures for today yet. Check the odds feed and kickoff date, then try again.', 'picks':[], 'count':0}
+    wants_picks=any(word in text for word in ['best','safest','odds','today','picks','recommend','show me'])
+    contextual=rows[:n] if wants_picks else rows[:5]
+    ai_reply=_gemini_reply(message, contextual, history)
+    if ai_reply:
+        return {'reply':ai_reply, 'picks':contextual if wants_picks else [], 'count':len(rows)}
     if any(word in text for word in ['best','safest','odds','today','picks','recommend']):
         picks=rows[:n]
-        reply=_gemini_reply(message, picks) or f"Here are today's {len(picks)} strongest mixed-market outcomes. I ranked them by estimated likelihood, not by edge. Challenge the risk note on each one."
+        reply=_gemini_reply(message, picks, history) or f"Here are today's {len(picks)} strongest mixed-market outcomes. I ranked them by estimated likelihood, not by edge. Challenge the risk note on each one."
         return {'reply':reply, 'picks':picks, 'count':len(picks)}
     match=next((r for r in rows if r['home_team'].lower() in text or r['away_team'].lower() in text), None)
     if match:
         return {'reply':f"Here is the case for {match['home_team']} v {match['away_team']}. Ask me to challenge any part of it.", 'picks':[match], 'count':1}
     if 'why' in text or 'risk' in text or 'debate' in text:
         return {'reply':'Pick a match or ask “give me the best 5 odds today.” Each card includes the evidence, main risk, and strongest alternative so you can debate the call.', 'picks':rows[:3], 'count':min(3,len(rows))}
-    return {'reply':'Try “give me the best 5 odds today”, “show me the safest picks”, or ask “why Barcelona?” The desk ranks likely outcomes and explains the reasoning.', 'picks':[], 'count':len(rows)}
+    if any(word in text for word in ['hi','hello','hey','what’s up',"what's up",'how are you']):
+        return {'reply':'I’m here and watching today’s fixtures. Ask me for the best picks, challenge one of the calls, or name a match and I’ll compare the available markets.', 'picks':[], 'count':len(rows)}
+    return {'reply':'Tell me which match or pick you want to examine. I can compare the result, totals, BTTS, double chance, draw-no-bet, and handicap markets where live odds are available.', 'picks':[], 'count':len(rows)}
 
 def handle_request(request):
     if request.method != 'POST':
         return {'statusCode':405,'headers':{'Content-Type':'application/json'},'body':json.dumps({'error':'POST a JSON message'})}
     try: payload=json.loads(request.body or '{}')
     except Exception: payload={}
-    result=answer(str(payload.get('message','')))
+    result=answer(str(payload.get('message','')), payload.get('history') or [])
     return {'statusCode':200,'headers':{'Content-Type':'application/json','Cache-Control':'no-store'},'body':json.dumps(result)}
 
 async def app(scope, receive, send):
