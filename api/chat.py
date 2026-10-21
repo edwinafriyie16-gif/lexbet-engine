@@ -156,8 +156,9 @@ def answer(message, history=None):
     n=_number(text)
     history=history or []
     if not rows:
-        ai_reply=_gemini_reply(message, [], history)
-        return {'reply':ai_reply or 'The live odds feed is temporarily unavailable or has no qualifying fixtures for today. You can still ask me about the last conversation, but I will not invent picks.', 'picks':[], 'count':0}
+        # Do not send an empty market context to Gemini: it may reinterpret
+        # phrases such as "10 odds" as an accumulator and invent advice.
+        return {'reply':f"I can’t see today’s live odds right now, so I can’t give you {n} picks or build an accumulator without inventing fixtures and prices. Try again when the live feed is available, or ask me about a market such as BTTS or Double Chance.", 'picks':[], 'count':0}
     wants_picks=any(word in text for word in ['best','safest','odds','today','picks','recommend','show me'])
     preferred_market='BTTS' if wants_btts else 'DOUBLE_CHANCE' if wants_double_chance else None
     mentioned=[r for r in rows if r['home_team'].lower() in text or r['away_team'].lower() in text]
