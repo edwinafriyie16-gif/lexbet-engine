@@ -24,7 +24,7 @@ def _live_market_rows(include_extra=False):
     """Build today's mixed-market desk from bookmaker consensus when SQLite is absent."""
     key=os.getenv('ODDS_API_KEY')
     if not key: return []
-    leagues = os.getenv('LEXBET_ODDS_SPORTS', 'soccer_epl,soccer_spain_la_liga,soccer_germany_bundesliga,soccer_italy_serie_a,soccer_france_ligue_one,soccer_efl_champ').split(',')
+    leagues = os.getenv('LEXBET_ODDS_SPORTS', 'soccer_uefa_champs_league,soccer_uefa_europa_league,soccer_uefa_europa_conference_league,soccer_epl,soccer_spain_la_liga,soccer_germany_bundesliga,soccer_italy_serie_a,soccer_france_ligue_one,soccer_efl_champ,soccer_portugal_primeira_liga,soccer_netherlands_eredivisie,soccer_turkey_super_league,soccer_saudi_arabia_pro_league,soccer_brazil_campeonato,soccer_usa_mls').split(',')
     today = datetime.now(timezone.utc).date()
     events=[]; event_sources=[]
     for sport in [x.strip() for x in leagues if x.strip()]:

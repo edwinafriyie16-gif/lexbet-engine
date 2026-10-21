@@ -80,11 +80,25 @@ def pull_elo(date: str | datetime | None = None) -> pd.DataFrame:
     return sd.ClubElo().read_by_date(date=date).reset_index(drop=True)
 
 
-def fetch_live_odds(sport: str = "soccer_epl", regions: str = "uk,eu", markets: str = "h2h,totals") -> list[dict]:
+def fetch_live_odds(sports: str | list[str] | None = None, regions: str = "uk,eu", markets: str = "h2h,totals") -> list[dict]:
     key = os.environ.get("ODDS_API_KEY")
     if not key: raise RuntimeError("ODDS_API_KEY is required for live odds")
-    r = requests.get(f"https://api.the-odds-api.com/v4/sports/{sport}/odds", params={"apiKey": key, "regions": regions, "markets": markets, "oddsFormat": "decimal"}, timeout=30)
-    r.raise_for_status(); return r.json()
+    if sports is None:
+        sports = os.getenv("LEXBET_ODDS_SPORTS", "soccer_uefa_champs_league,soccer_uefa_europa_league,soccer_uefa_europa_conference_league,soccer_epl,soccer_spain_la_liga,soccer_germany_bundesliga,soccer_italy_serie_a,soccer_france_ligue_one,soccer_efl_champ,soccer_portugal_primeira_liga,soccer_netherlands_eredivisie,soccer_turkey_super_league,soccer_saudi_arabia_pro_league,soccer_brazil_campeonato,soccer_usa_mls")
+    if isinstance(sports, str): sports = [x.strip() for x in sports.split(",") if x.strip()]
+    events=[]; failures=[]
+    for sport in sports:
+        try:
+            r = requests.get(f"https://api.the-odds-api.com/v4/sports/{sport}/odds", params={"apiKey": key, "regions": regions, "markets": markets, "oddsFormat": "decimal"}, timeout=30)
+            r.raise_for_status(); events.extend(r.json())
+        except requests.HTTPError as exc:
+            failures.append(f"{sport}: HTTP {exc.response.status_code if exc.response is not None else 'unknown'}")
+        except Exception as exc:
+            failures.append(f"{sport}: {type(exc).__name__}")
+    if not events and failures:
+        raise RuntimeError("No live odds returned; " + "; ".join(failures[:3]))
+    if failures: print("live odds warnings: " + "; ".join(failures[:6]))
+    return events
 
 
 def normalise_odds(payload: list[dict]) -> pd.DataFrame:
