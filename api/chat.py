@@ -8,7 +8,7 @@ from urllib.request import Request, urlopen
 ROOT = Path(__file__).resolve().parents[1]
 DB = Path(os.getenv('LEXBET_DB_PATH', ROOT / 'data' / 'lexbet.sqlite'))
 
-def _rows():
+def _rows(include_extra=False):
     if DB.exists():
         conn = sqlite3.connect(DB); conn.row_factory = sqlite3.Row
         rows = conn.execute("SELECT home_team, away_team, market, selection, odds, model_prob, market_prob, blended_prob, confidence, rationale, risks, alternatives FROM picks WHERE status='open' AND kickoff > datetime('now') ORDER BY blended_prob DESC LIMIT 50").fetchall(); conn.close()
@@ -18,9 +18,9 @@ def _rows():
             item['display_selection'] = {'Home': item['home_team'], 'Away': item['away_team'], 'O': 'Over 2.5', 'U': 'Under 2.5'}.get(item['selection'], item['selection'])
             out.append(item)
         if out: return out
-    return _live_market_rows()
+    return _live_market_rows(include_extra=include_extra)
 
-def _live_market_rows():
+def _live_market_rows(include_extra=False):
     """Build today's mixed-market desk from bookmaker consensus when SQLite is absent."""
     key=os.getenv('ODDS_API_KEY')
     if not key: return []
@@ -68,7 +68,7 @@ def _live_market_rows():
     # exposes them through the event-odds endpoint rather than the featured feed.
     # Optional markets are expensive on the provider API. Keep them opt-in so
     # the stable daily feed is not exhausted by event-level requests.
-    if os.getenv('LEXBET_EXTRA_MARKETS','0') != '1':
+    if not include_extra and os.getenv('LEXBET_EXTRA_MARKETS','0') != '1':
         event_sources=[]
     for sport,event in event_sources[:8]:
         if event not in today_events: continue
@@ -149,14 +149,22 @@ def _gemini_reply(message, picks, history):
     return None
 
 def answer(message, history=None):
-    text=message.lower(); rows=_rows(); n=_number(text)
+    text=message.lower()
+    wants_btts=any(term in text for term in ('btts','both teams to score','gg/ng','gg ng','both sides score'))
+    wants_double_chance=any(term in text for term in ('double chance','1x','x2','12'))
+    rows=_rows(include_extra=wants_btts or wants_double_chance)
+    n=_number(text)
     history=history or []
     if not rows:
         ai_reply=_gemini_reply(message, [], history)
         return {'reply':ai_reply or 'The live odds feed is temporarily unavailable or has no qualifying fixtures for today. You can still ask me about the last conversation, but I will not invent picks.', 'picks':[], 'count':0}
     wants_picks=any(word in text for word in ['best','safest','odds','today','picks','recommend','show me'])
+    preferred_market='BTTS' if wants_btts else 'DOUBLE_CHANCE' if wants_double_chance else None
     mentioned=[r for r in rows if r['home_team'].lower() in text or r['away_team'].lower() in text]
-    contextual=(mentioned + [r for r in rows if r not in mentioned])[:n] if wants_picks else ((mentioned + [r for r in rows if r not in mentioned])[:8])
+    ordered=([r for r in rows if r['market']==preferred_market] if preferred_market else []) + [r for r in rows if r['market']!=preferred_market]
+    ordered_mentioned=[r for r in ordered if r['home_team'].lower() in text or r['away_team'].lower() in text]
+    ordered_others=[r for r in ordered if r not in ordered_mentioned]
+    contextual=(ordered_mentioned + ordered_others)[:n] if wants_picks else ((ordered_mentioned + ordered_others)[:8])
     ai_reply=_gemini_reply(message, contextual, history)
     if ai_reply:
         return {'reply':ai_reply, 'picks':contextual if wants_picks else [], 'count':len(rows)}
